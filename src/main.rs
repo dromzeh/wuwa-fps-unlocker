@@ -1,8 +1,9 @@
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
-use std::io;
+use std::io::{self, Write};
 // use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use inquire::{InquireError, Select};
+use sysinfo::System;
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -60,6 +61,12 @@ fn main() {
             "An error occured. If this is unexpected, please open a GitHub issue: {}",
             e
         );
+        // attempt to write a readonly database => WW db lock
+        if e.to_string()
+            .contains("attempt to write a readonly database")
+        {
+            println!("\nYour error is likely due to Wuthering Waves running and locking the database. Please close the game before running this program.");
+        }
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
@@ -67,10 +74,30 @@ fn main() {
     }
 }
 
+fn check_game_is_running() -> bool {
+    let sys = System::new_all();
+    sys.processes().values().any(|process| {
+        process.name().contains("Wuthering Waves") || process.name().contains("WutheringWavesGame")
+    })
+}
+
 fn run() -> Result<()> {
-    println!(
-        "\nEnter Wuthering Waves Location (e.g. C:/Games/Wuthering Waves/Wuthering Waves Game):"
+    println!("\nWuthering Waves FPS Unlocker");
+    println!("NOTE: Modifying the game settings in any way after running this program WILL reset the frame rate to 60 FPS.");
+
+    if check_game_is_running() {
+        println!("\nWuthering Waves has been detected as running. Please close the game before running this program.");
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
+        return Ok(());
+    }
+
+    print!(
+        "\nEnter Wuthering Waves Location (e.g. C:/Games/Wuthering Waves/Wuthering Waves Game): "
     );
+    io::stdout().flush().unwrap();
 
     let mut game_location = String::new();
     io::stdin()
@@ -113,15 +140,15 @@ fn run() -> Result<()> {
             Ok("165") => 165,
             Ok("240") => 240,
             Ok("Custom") => {
+                print!("Enter custom frame rate: ");
+                io::stdout().flush().unwrap();
+
                 let mut custom_frame_rate = String::new();
-                println!("Enter custom frame rate:");
                 io::stdin()
                     .read_line(&mut custom_frame_rate)
                     .expect("Failed to read line");
-                custom_frame_rate
-                    .trim()
-                    .parse::<u32>()
-                    .expect("Failed to parse custom frame rate")
+
+                custom_frame_rate.trim().parse::<u32>().unwrap()
             }
             _ => 60,
         };
