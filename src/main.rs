@@ -54,7 +54,14 @@ struct GameQualitySetting {
     AimAssistEnable: u8,
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     println!(
         "\nEnter Wuthering Waves Location (e.g. C:/Games/Wuthering Waves/Wuthering Waves Game):"
     );
