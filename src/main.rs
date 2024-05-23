@@ -98,14 +98,19 @@ fn run() -> Result<()> {
 
         println!("\nCurrent Frame Rate: {}", game_quality.KeyCustomFrameRate);
 
-        let fps_options: Vec<&str> = vec!["30", "60", "120", "240", "Custom"];
+        let fps_options: Vec<&str> =
+            vec!["30", "60", "72", "90", "120", "144", "165", "240", "Custom"];
         let fps_selection: Result<&str, InquireError> =
             Select::new("What FPS to set?", fps_options).prompt();
 
         let new_frame_rate = match fps_selection {
             Ok("30") => 30,
             Ok("60") => 60,
+            Ok("72") => 72,
+            Ok("90") => 90,
             Ok("120") => 120,
+            Ok("144") => 144,
+            Ok("165") => 165,
             Ok("240") => 240,
             Ok("Custom") => {
                 let mut custom_frame_rate = String::new();
@@ -122,6 +127,7 @@ fn run() -> Result<()> {
         };
 
         game_quality.KeyCustomFrameRate = new_frame_rate;
+        game_quality.KeyPcVsync = 0;
 
         let updated_value =
             serde_json::to_string(&game_quality).expect("Failed to convert struct to JSON");
