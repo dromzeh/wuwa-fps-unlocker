@@ -119,6 +119,11 @@ fn main() -> Result<()> {
         )?;
 
         println!("\nKeyCustomFrameRate updated to {}", new_frame_rate);
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
     } else {
         println!("\nGameQualitySetting not found in LocalStorage");
     }
