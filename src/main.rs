@@ -56,8 +56,14 @@ struct GameQualitySetting {
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("error: {}", e);
-        std::process::exit(1);
+        eprintln!(
+            "An error occured. If this is unexpected, please open a GitHub issue: {}",
+            e
+        );
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
     }
 }
 
