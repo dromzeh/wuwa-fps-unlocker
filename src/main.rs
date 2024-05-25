@@ -29,7 +29,7 @@ struct GameQualitySetting {
     KeyNvidiaSuperSamplingEnable: u8,
     KeyNvidiaSuperSamplingFrameGenerate: u8,
     KeyNvidiaSuperSamplingMode: u8,
-    KeyNvidiaSuperSamplingSharpness: u8,
+    KeyNvidiaSuperSamplingSharpness: f32,
     KeyNvidiaReflex: u8,
     KeyFsrEnable: u8,
     HorizontalViewSensitivity: u8,
