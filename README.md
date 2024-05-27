@@ -1,5 +1,4 @@
-<div align="center">
-  <img src="https://cdn.marcel.best/ShareX/2024/05/Code_xodit20vy1.png" alt="screenshot" width="1080" height="290"/>
+<div align="center">  
   
   # Wuthering Waves FPS Unlocker
 </div>
