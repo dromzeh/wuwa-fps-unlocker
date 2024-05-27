@@ -1,8 +1,8 @@
+// use glfw::{Action, Context, Key};
+use inquire::{InquireError, Select};
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
-use std::io::{self, Write};
-// use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use inquire::{InquireError, Select};
+use std::io::{self, stdin, stdout, Read, Write};
 use sysinfo::System;
 
 #[derive(Serialize, Deserialize)]
@@ -55,56 +55,122 @@ struct GameQualitySetting {
     AimAssistEnable: u8,
 }
 
+fn get_primary_monitor_refresh_rate() -> u32 {
+    let mut glfw = glfw::init(|err, desc| {
+        panic!("GLFW error {:?}: {}", err, desc);
+    })
+    .unwrap();
+
+    let primary_monitor = glfw.with_primary_monitor(|_, monitor| {
+        monitor.map(|monitor| {
+            let video_mode = monitor.get_video_mode().unwrap();
+            let width = video_mode.width;
+            let height = video_mode.height;
+            let binding = monitor.get_video_modes();
+            let refresh_rate = binding
+                .iter()
+                .filter(|mode| mode.width == width && mode.height == height)
+                .max_by_key(|mode| mode.refresh_rate);
+
+            refresh_rate.map(|mode| mode.refresh_rate).unwrap_or(60)
+        })
+    });
+
+    primary_monitor.unwrap_or(60)
+}
+
+fn pause() {
+    let mut stdin = stdin();
+    let mut stdout = stdout();
+
+    write!(stdout, "Press any key to continue...").unwrap();
+    stdout.flush().unwrap();
+
+    let mut buffer = [0; 1];
+    match stdin.read(&mut buffer) {
+        Ok(_) => {}
+        Err(e) => eprintln!("Failed to read from stdin: {}", e),
+    };
+}
+
+fn get_custom_frame_rate() -> u32 {
+    print!("Enter custom frame rate: ");
+    io::stdout().flush().unwrap();
+
+    let mut custom_frame_rate = String::new();
+    io::stdin()
+        .read_line(&mut custom_frame_rate)
+        .expect("Failed to read line");
+
+    custom_frame_rate.trim().parse::<u32>().unwrap_or(60)
+}
+
 fn main() {
     if let Err(e) = run() {
         eprintln!(
             "An error occured. If this is unexpected, please open a GitHub issue: {}",
             e
         );
+
         // attempt to write a readonly database => WW db lock
-        if e.to_string()
-            .contains("attempt to write a readonly database")
-        {
+        let error_message = e.to_string();
+
+        if error_message.contains("attempt to write a readonly database") {
             println!("\nYour error is likely due to Wuthering Waves running and locking the database. Please close the game before running this program.");
         }
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
+
+        // unable to open database file => incorrect game location
+        if error_message.contains("unable to open database file") {
+            println!("\nYour error is likely due to an incorrect game location. Please ensure you have entered the correct path.");
+        }
+
+        pause();
     }
+    pause();
 }
 
 fn check_game_is_running() -> bool {
     let sys = System::new_all();
     sys.processes().values().any(|process| {
-        process.name().contains("Wuthering Waves") || process.name().contains("WutheringWavesGame")
+        process.name().contains("Wuthering Waves")
+            || process.name().contains("Wuthering Waves Game")
     })
 }
 
 fn run() -> Result<()> {
-    println!("\nWuthering Waves FPS Unlocker");
+    println!("\nWuthering Waves FPS Unlocker - https://github.com/dromzeh/wuwa-fps-unlocker");
     println!("NOTE: Modifying the game settings in any way after running this program WILL reset the frame rate to 60 FPS.");
 
     if check_game_is_running() {
         println!("\nWuthering Waves has been detected as running. Please close the game before running this program.");
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        return Ok(());
+        pause();
     }
 
-    print!(
-        "\nEnter Wuthering Waves Location (e.g. C:/Games/Wuthering Waves/Wuthering Waves Game): "
+    println!("\nRequesting game location...");
+
+    let game_location = tinyfiledialogs::open_file_dialog(
+        "Select /Wuthering Waves/Wuthering Waves Game/Wuthering Waves.exe",
+        "",
+        Some((&["Wuthering Waves.exe"], "Wuthering Waves.exe")),
     );
-    io::stdout().flush().unwrap();
 
-    let mut game_location = String::new();
-    io::stdin()
-        .read_line(&mut game_location)
-        .expect("Failed to read line");
+    let game_location = match game_location {
+        Some(file_path) => file_path,
+        None => {
+            println!("User did not select a file.");
+            tinyfiledialogs::message_box_ok(
+                "Error",
+                "No file selected",
+                tinyfiledialogs::MessageBoxIcon::Error,
+            );
+            return Ok(());
+        }
+    };
 
-    game_location = game_location.trim().to_string();
+    let game_location = game_location
+        .split("Wuthering Waves.exe")
+        .collect::<Vec<&str>>()
+        .join("");
 
     let db_path = format!(
         "{}/Client/Saved/LocalStorage/LocalStorage.db",
@@ -125,32 +191,30 @@ fn run() -> Result<()> {
 
         println!("\nCurrent Frame Rate: {}", game_quality.KeyCustomFrameRate);
 
-        let fps_options: Vec<&str> =
-            vec!["30", "60", "72", "90", "120", "144", "165", "240", "Custom"];
-        let fps_selection: Result<&str, InquireError> =
-            Select::new("What FPS to set?", fps_options).prompt();
+        let primary_monitor_refresh_rate = get_primary_monitor_refresh_rate();
 
-        let new_frame_rate = match fps_selection {
-            Ok("30") => 30,
-            Ok("60") => 60,
-            Ok("72") => 72,
-            Ok("90") => 90,
-            Ok("120") => 120,
-            Ok("144") => 144,
-            Ok("165") => 165,
-            Ok("240") => 240,
-            Ok("Custom") => {
-                print!("Enter custom frame rate: ");
-                io::stdout().flush().unwrap();
+        let prompt = format!(
+            "Your primary monitor's refresh rate is {}. Would you like to set the game frame rate to this value?",
+            primary_monitor_refresh_rate
+        );
 
-                let mut custom_frame_rate = String::new();
-                io::stdin()
-                    .read_line(&mut custom_frame_rate)
-                    .expect("Failed to read line");
+        let select_options = vec!["Yes", "No"];
+        let select_refresh_rate = Select::new(&prompt, select_options).prompt();
 
-                custom_frame_rate.trim().parse::<u32>().unwrap()
+        let new_frame_rate = match select_refresh_rate {
+            Ok("Yes") => primary_monitor_refresh_rate,
+            _ => {
+                let fps_options: Vec<&str> =
+                    vec!["30", "60", "72", "90", "120", "144", "165", "240", "Custom"];
+                let fps_selection: Result<&str, InquireError> =
+                    Select::new("What FPS to set?", fps_options).prompt();
+
+                match fps_selection {
+                    Ok("Custom") => get_custom_frame_rate(),
+                    Ok(selection) => selection.parse::<u32>().unwrap_or(60),
+                    _ => 60,
+                }
             }
-            _ => 60,
         };
 
         game_quality.KeyCustomFrameRate = new_frame_rate;
@@ -164,12 +228,7 @@ fn run() -> Result<()> {
             params![updated_value],
         )?;
 
-        println!("\nKeyCustomFrameRate updated to {}", new_frame_rate);
-
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
+        println!("\nUpdated framerate to {}", new_frame_rate);
     } else {
         println!("\nGameQualitySetting not found in LocalStorage");
     }
