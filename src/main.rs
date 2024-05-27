@@ -87,7 +87,7 @@ fn pause() {
     stdout.flush().unwrap();
 
     let mut buffer = [0; 1];
-    match stdin.read(&mut buffer) {
+    match stdin.read_exact(&mut buffer) {
         Ok(_) => {}
         Err(e) => eprintln!("Failed to read from stdin: {}", e),
     };
